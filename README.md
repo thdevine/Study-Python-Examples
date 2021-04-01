@@ -7,4 +7,5 @@ This repo is especially for revisiting subjects/papers/books/research materials 
   ## Code
   - See my scripts; the most interesting one is the interview questions script. I've only recently started solving interview questions using Python given I needed to prioritize SQL until now
   ## Books/Read
-  - Grokking Algorithms: An Illustrated Guide for Programmers and Other Curious People 1st Edition
+  - for more experienced people neededing to understand efficiency, use-case, and more: Problem Solving with Algorithms and Data Structures Using Python SECOND EDITION Paperback – August 22, 2011 by Bradley N. Miller  (Author), David L. Ranum (Author)
+  - for beginners needing to understand very basic ideas, concepts, logic: Grokking Algorithms: An Illustrated Guide for Programmers and Other Curious People 1st Edition
