@@ -1,0 +1,52 @@
+# IL5 MLOps Feedback Loop: Brief
+
+**Flow:** Source systems → Synapse pipelines → ADLS Gen2 (raw → curated → feature → feedback zones) → Azure ML (Dev/Test-Stage/Prod workspaces) → deployed endpoint → inference + human-reviewed feedback → back into feature zone → scheduled retrain.
+
+## Stage → Azure service
+
+| Stage | Services | Gov note |
+|---|---|---|
+| Develop | AML compute instances, AML Environments, ACR | CI/CD control plane issue: see risks |
+| Train | AML Pipelines, compute clusters, MLflow | GA |
+| Validate/Test | Custom eval steps + Fairlearn/InterpretML | Responsible AI dashboard **not available** in Gov |
+| Deploy | Model Registry, managed online + batch endpoints | Managed-VNet isolation still preview in Gov |
+| Monitor | Azure Monitor, App Insights, Sentinel | GA |
+| Feedback/re-loop | ADLS feedback zone, scheduled AML pipeline recurrence | Don't rely on Event Grid trigger: preview-only |
+
+## Core IL5 controls
+
+- **Region:** IL5 = Azure Government only (not Gov Secret/IL6); 5 authorized regions: US Gov AZ/TX/VA (need Dedicated Host or isolated VM SKUs) vs. US DoD Central/East (no extra config, physically separated).
+- **Encryption:** CMK/HSM via Key Vault on all storage: must be enabled *before* first write.
+- **Network/identity:** Private endpoints, no public egress, Entra ID Gov + RBAC + PIM, role split between data scientists / ML engineers / approvers.
+- **Governance gate:** Recorded human approval before Test→Prod promotion, backed by the Fairlearn/InterpretML report.
+- **Lineage:** Purview (Gov: US Gov Virginia only): but Synapse pipeline lineage isn't auto-captured in Gov; needs a compensating control.
+
+## Top risks
+
+| Risk | Mitigation |
+|---|---|
+| Synapse→Purview lineage not auto-captured in Gov | Push lineage via Atlas API, or maintain a manual per-dataset manifest |
+| Responsible AI dashboard unavailable in Gov | Fairlearn/InterpretML as pipeline step, reviewed at approval gate |
+| Azure DevOps Services/GitHub Enterprise Cloud sit outside the IL5 boundary (GH Gov is only FedRAMP Moderate) | Self-hosted agents/server inside the Gov VNet; ISSO sign-off on the pattern |
+| Managed-VNet isolation for online endpoints is preview in Gov | Use customer-VNet injection + private endpoints instead |
+| CMK can't be applied retroactively | Gate go-live on a "CMK verified" IaC check |
+
+## Open questions to confirm before build
+
+Batch vs. real-time inference; model type (classical ML vs. generative); target region (IL5 vs IL6); existing Purview/Sentinel/CI-CD already under this ATO; Feature Store's actual Gov availability (unconfirmed: fallback is versioned tables in the feature zone).
+
+## Diagram
+
+```mermaid
+flowchart LR
+    SRC["Source systems"] --> SYN["Synapse pipelines"] --> ADLS[("ADLS Gen2: raw→curated→feature")]
+    ADLS --> DEV["AML Dev"] --> STG["AML Test/Stage:\ntrain + eval"] -- "approval gate" --> PRD["AML Prod:\nregistry + endpoints"]
+    PRD --> MON["Monitor: Azure Monitor, drift checks"]
+    PRD -- "inference + outcomes" --> FBK[("Feedback zone")]
+    FBK -- "human review" --> ADLS
+    MON -- "scheduled retrain trigger" --> STG
+```
+
+## Sources
+
+[DoD IL5 offering](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-dod-il5) · [Gov IL5 isolation guidelines](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5) · [Azure ML cloud parity](https://learn.microsoft.com/en-us/azure/machine-learning/reference-machine-learning-cloud-parity?view=azureml-api-2) · [Purview classic feature availability](https://learn.microsoft.com/en-us/purview/legacy/classic-feature-availability) · [Azure Pipelines into Gov](https://learn.microsoft.com/en-us/azure/azure-government/connect-with-azure-pipelines) · [GitHub FedRAMP Moderate](https://github.com/newsroom/press-releases/github-to-pursue-fedramp-moderate)
