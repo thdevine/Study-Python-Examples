@@ -1,0 +1,58 @@
+flowchart TB
+    SRC["Source systems\nMission and operational data feeding daily ingestion pipelines"]
+
+    subgraph SYN["Azure Synapse Analytics — Gov, CMK, private endpoints"]
+        P1["Synapse pipelines\nIngest, clean, and transform data before it lands in the lake"]
+    end
+
+    subgraph ADLS["ADLS Gen2 — zoned, CMK-encrypted lake"]
+        RAW[("Raw zone\nImmutable landing data, write-once, CMK-encrypted from Synapse ingestion")]
+        CUR[("Curated zone\nCleaned, conformed data registered as Azure ML datastores")]
+        FEAT[("Feature/training zone\nVersioned feature tables consumed directly by training pipelines")]
+        FBK[("Feedback zone\nInference outputs plus human-reviewed ground truth awaiting re-training")]
+    end
+
+    subgraph DEV["AML workspace — Dev"]
+        D1["Notebooks and compute instances\nData scientists prototype against subsetted or synthetic data only"]
+    end
+
+    subgraph STG["AML workspace — Test/Stage"]
+        T1["Training pipelines\nFull pipeline run with MLflow experiment tracking on curated data"]
+        T2["Bias, drift, explainability eval\nFairlearn and InterpretML substitute for the Gov-unavailable RAI dashboard"]
+        T3["Model registry — staged\nCandidate model versions await human approval before promotion"]
+    end
+
+    subgraph PRD["AML workspace — Prod"]
+        R1["Model registry — prod\nOnly approved, promoted model versions live here"]
+        R2["Managed online endpoint\nReal-time inference, customer VNet injection instead of preview isolation"]
+        R3["Managed batch endpoint\nScheduled batch scoring for non-real-time inference workloads"]
+    end
+
+    subgraph MON["Monitoring"]
+        M1["Azure Monitor / App Insights\nTracks endpoint health, latency, and error rates continuously"]
+        M2["Scheduled drift and performance checks\nCompares live metrics against baseline to decide on retraining"]
+        M3["Microsoft Sentinel\nSecurity event correlation and audit evidence for ATO review"]
+    end
+
+    GOV["Cross-cutting governance\nEntra ID Gov, RBAC/PIM, Key Vault CMK/HSM, Purview lineage across every stage"]
+
+    SRC --> P1 --> RAW --> CUR --> FEAT
+    FEAT --> D1 --> T1 --> T2 --> T3
+    T3 -- "human approval gate" --> R1
+    R1 --> R2
+    R1 --> R3
+    R2 --> M1
+    R3 --> M1
+    M1 --> M2
+    M1 --> M3
+    R2 -- "inference + outcomes" --> FBK
+    R3 -- "inference + outcomes" --> FBK
+    FBK -- "human review / labeling" --> FEAT
+    M2 -- "retrain trigger" --> T1
+
+    GOV -.-> SYN
+    GOV -.-> ADLS
+    GOV -.-> DEV
+    GOV -.-> STG
+    GOV -.-> PRD
+    GOV -.-> MON
